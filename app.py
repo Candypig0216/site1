@@ -62,6 +62,10 @@ def get_video_info(youtube_url):
 async def analyze_comments(request: AnalysisRequest):
     try:
         video_title, channel_name = get_video_info(request.url)
+        if not video_title:
+            video_title = "유튜브 여론 분석 대상 영상"
+        if not channel_name:
+            channel_name = "유튜브 크리에이터 채널"
         
         # 댓글 크롤링 (사용자가 선택한 정렬 방식 반영)
         downloader = YoutubeCommentDownloader()
@@ -124,7 +128,7 @@ async def analyze_comments(request: AnalysisRequest):
                 
         return {
             "title": video_title,
-            "channel": channel_name,
+            "author": channel_name,
             "report": result_data.get("report", response.text),
             "chart_data": {
                 "positive": result_data.get("positive", 40),
