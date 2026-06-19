@@ -90,10 +90,9 @@
     <script>
         let chartInstance = null;
         
-        // [필수 수정] 내 컴퓨터 로컬 구동과 클라우드 배포 주소 자동 분기 처리
         const HOST_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
             ? 'http://localhost:8000' 
-            : 'https://본인의-render-웹서비스-이름.onrender.com'; // 👈 본인의 Render 서버 URL 주소 입력하는 곳
+            : 'https://https://site1-9l0u.onrender.com';
 
         async function runAnalysis() {
             const apiKey = document.getElementById('apiKey').value.trim();
@@ -101,7 +100,7 @@
             const sortBy = document.querySelector('input[name="sortBy"]:checked').value;
 
             if (!apiKey || !url) {
-                alert('API 키와 유튜브 URL 주소를 정확하게 입력해 주세요!');
+                alert('API 키와 유튜브 URL 주소를 정확하게 입력해 주세요!!!');
                 return;
             }
 
@@ -117,7 +116,7 @@
 
                 if (!res.ok) {
                     const err = await res.json();
-                    throw new Error(err.detail || '분석 중 에러가 발생했습니다.');
+                    throw new Error(err.detail || '😥분석 중 에러가 발생했습니다.');
                 }
 
                 const data = await res.json();
