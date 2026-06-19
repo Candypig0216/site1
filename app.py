@@ -44,55 +44,60 @@ class AnalysisRequest(BaseModel):
 
 def get_video_info(youtube_url):
     try:
-        req = urllib.request.Request(youtube_url, headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(youtube_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         with urllib.request.urlopen(req, timeout=5) as response:
             html = response.read().decode('utf-8')
         
         title_match = re.search(r'<meta name="title" content="([^"]+)"', html)
         channel_match = re.search(r'<link itemprop="name" content="([^"]+)"', html)
         
-        title = title_match.group(1) if title_match else "알 수 없는 제목"
-        channel = channel_match.group(1) if channel_match else "알 수 없는 채널"
+        title = title_match.group(1) if title_match else None
+        channel = channel_match.group(1) if channel_match else None
         
-        return html_parser.unescape(title), html_parser.unescape(channel)
+        if title: title = html_parser.unescape(title)
+        if channel: channel = html_parser.unescape(channel)
+        
+        return title, channel
     except Exception:
-        return "정보를 조회할 수 없음", "정보를 조회할 수 없음"
+        return None, None
 
 @app.post("/api/analyze")
 async def analyze_comments(request: AnalysisRequest):
     try:
+        # 1. 영상 정보 추출 및 결측치 방어 코드 적용
         video_title, channel_name = get_video_info(request.url)
-        if not video_title:
+        if not video_title or "알 수 없는" in video_title or "조회할 수 없음" in video_title:
             video_title = "유튜브 여론 분석 대상 영상"
-        if not channel_name:
+        if not channel_name or "알 수 없는" in channel_name or "조회할 수 없음" in channel_name:
             channel_name = "유튜브 크리에이터 채널"
         
-        # 댓글 크롤링 (사용자가 선택한 정렬 방식 반영)
+        # 2. 댓글 크롤링 및 안전성 강화
         downloader = YoutubeCommentDownloader()
-        comments = downloader.get_comments_from_url(request.url, sort_by=request.sort_by)
+        try:
+            comments = downloader.get_comments_from_url(request.url, sort_by=request.sort_by)
+        except Exception as ce:
+            raise HTTPException(status_code=400, detail=f"유튜브 댓글 로드 실패: {str(ce)}")
         
         comment_list = []
-        for i, comment in enumerate(comments):
-        raw_text = comment.get('text') or ""
-        text = raw_text.strip()
-    
-        if len(text) > 250:
-            text = text[:250] + "...(중략)"
-        comment_list.append(text)
-        if i >= 79:
-            break
-            if len(text) > 250: 
-                text = text[:250] + "...(중략)"
-            comment_list.append(text)
-            if i >= 79:  # 속도와 안정성을 위해 상위 80개 제한
-                break
+        if comments:
+            for i, comment in enumerate(comments):
+                raw_text = comment.get('text') or ""
+                text = raw_text.strip()
                 
+                if text:
+                    if len(text) > 250:
+                        text = text[:250] + "...(중략)"
+                    comment_list.append(text)
+                
+                if len(comment_list) >= 80:  # 정확히 상위 80개만 제한
+                    break
+                    
         if not comment_list:
             raise HTTPException(status_code=400, detail="댓글을 추출하지 못했습니다. URL을 확인해 주세요.")
 
         all_comments_text = "\n".join([f"- {c}" for c in comment_list])
         
-        # Gemini API 호출 설정
+        # 3. Gemini API 호출 설정
         client = genai.Client(api_key=request.api_key)
         
         prompt = (
@@ -122,7 +127,7 @@ async def analyze_comments(request: AnalysisRequest):
             )
         )
         
-        # JSON 데이터 파싱
+        # 4. AI 반환 JSON 데이터 안전 파싱
         json_match = re.search(r"```json\s*([\s\S]*?)\s*```", response.text)
         if json_match:
             result_data = json.loads(json_match.group(1))
@@ -133,14 +138,15 @@ async def analyze_comments(request: AnalysisRequest):
             else:
                 raise Exception("AI가 정형화된 JSON 데이터를 생성하는 데 실패했습니다.")
                 
+        # 5. 프론트엔드가 요구하는 'channel', 'title' 규격에 맞춰 안전하게 리턴
         return {
             "title": video_title,
             "channel": channel_name,
             "report": result_data.get("report", response.text),
             "chart_data": {
-                "positive": result_data.get("positive", 40),
-                "neutral": result_data.get("neutral", 30),
-                "negative": result_data.get("negative", 30)
+                "positive": int(result_data.get("positive", 40)),
+                "neutral": int(result_data.get("neutral", 30)),
+                "negative": int(result_data.get("negative", 30))
             }
         }
         
