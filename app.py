@@ -128,7 +128,7 @@ async def analyze_comments(request: AnalysisRequest):
                 
         return {
             "title": video_title,
-            "author": channel_name,
+            "channel": channel_name,
             "report": result_data.get("report", response.text),
             "chart_data": {
                 "positive": result_data.get("positive", 40),
