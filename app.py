@@ -73,7 +73,14 @@ async def analyze_comments(request: AnalysisRequest):
         
         comment_list = []
         for i, comment in enumerate(comments):
-            text = comment['text'].strip()
+        raw_text = comment.get('text') or ""
+        text = raw_text.strip()
+    
+        if len(text) > 250:
+            text = text[:250] + "...(중략)"
+        comment_list.append(text)
+        if i >= 79:
+            break
             if len(text) > 250: 
                 text = text[:250] + "...(중략)"
             comment_list.append(text)
